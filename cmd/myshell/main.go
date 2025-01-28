@@ -17,7 +17,6 @@ func main() {
 
 		// Wait for user input
 		command, err := bufio.NewReader(os.Stdin).ReadString('\n')
-
 		if err != nil {
 			os.Exit(1)
 		}
@@ -39,6 +38,8 @@ func main() {
 		case "type":
 			if slices.Contains(builtins, args[0]) {
 				fmt.Fprintln(os.Stdout, args[0]+" is a shell builtin")
+			} else if isExecutableInPath(args[0]) != "" {
+				fmt.Fprintln(os.Stdout, isExecutableInPath(args[0]))
 			} else {
 				fmt.Fprintln(os.Stdout, args[0]+": not found")
 			}
@@ -47,4 +48,17 @@ func main() {
 		}
 
 	}
+}
+
+func isExecutableInPath(executable string) string {
+	path := os.Getenv("PATH")
+	paths := strings.Split(path, ":")
+	for _, path := range paths {
+		exec := path + "/" + executable
+		if _, err := os.Stat(exec); err == nil {
+
+			return executable + " is " + exec
+		}
+	}
+	return ""
 }
