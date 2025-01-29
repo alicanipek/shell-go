@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"os/exec"
 	"slices"
 	"strconv"
 	"strings"
@@ -38,16 +39,32 @@ func main() {
 		case "type":
 			if slices.Contains(builtins, args[0]) {
 				fmt.Fprintln(os.Stdout, args[0]+" is a shell builtin")
-			} else if isExecutableInPath(args[0]) != "" {
-				fmt.Fprintln(os.Stdout, isExecutableInPath(args[0]))
 			} else {
-				fmt.Fprintln(os.Stdout, args[0]+": not found")
+				inPath := isExecutableInPath(args[0])
+				if inPath != "" {
+					fmt.Fprintln(os.Stdout, inPath)
+				} else {
+					fmt.Fprintln(os.Stdout, args[0]+": not found")
+				}
 			}
+
 		default:
-			fmt.Fprintln(os.Stdout, command+": command not found")
+			err := execute(com, args)
+			if err != nil {
+				fmt.Fprintln(os.Stdout, command+": command not found")
+			}
 		}
 
 	}
+}
+
+func execute(executable string, args []string) error {
+
+	cmd := exec.Command(executable, args...)
+	cmd.Stderr = os.Stderr
+	cmd.Stdout = os.Stdout
+	er := cmd.Run()
+	return er
 }
 
 func isExecutableInPath(executable string) string {
