@@ -22,7 +22,7 @@ func main() {
 			os.Exit(1)
 		}
 		command = strings.Trim(command, "\n")
-		parts := strings.Split(command, " ")
+		parts := parseInput(command)
 
 		com := parts[0]
 		args := parts[1:]
@@ -81,6 +81,38 @@ func execute(executable string, args []string) error {
 	cmd.Stdout = os.Stdout
 	er := cmd.Run()
 	return er
+}
+
+func parseInput(input string) []string {
+	var args []string
+	var token strings.Builder
+	inSingleQuote := false
+
+	for i := 0; i < len(input); i++ {
+		char := input[i]
+
+		switch {
+		case char == '\'':
+			// Toggle single quote state
+			inSingleQuote = !inSingleQuote
+		case char == ' ' && !inSingleQuote:
+			// End of token, add to args
+			if token.Len() > 0 {
+				args = append(args, token.String())
+				token.Reset()
+			}
+		default:
+			// Add character to current token
+			token.WriteByte(char)
+		}
+	}
+
+	// Add the last token if it exists
+	if token.Len() > 0 {
+		args = append(args, token.String())
+	}
+
+	return args
 }
 
 func isExecutableInPath(executable string) string {
