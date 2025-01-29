@@ -53,6 +53,11 @@ func main() {
 				os.Exit(1)
 			}
 			fmt.Fprintln(os.Stdout, dir)
+		case "cd":
+			err := os.Chdir(args[0])
+			if err != nil {
+				fmt.Println("cd: " + args[0] + ": No such file or directory")
+			}
 		default:
 			err := execute(com, args)
 			if err != nil {
