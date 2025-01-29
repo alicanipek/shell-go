@@ -11,7 +11,7 @@ import (
 )
 
 func main() {
-	builtins := []string{"type", "exit", "echo"}
+	builtins := []string{"type", "exit", "echo", "pwd"}
 	for {
 		// Uncomment this block to pass the first stage
 		fmt.Fprint(os.Stdout, "$ ")
@@ -47,7 +47,12 @@ func main() {
 					fmt.Fprintln(os.Stdout, args[0]+": not found")
 				}
 			}
-
+		case "pwd":
+			dir, err := os.Getwd()
+			if err != nil {
+				os.Exit(1)
+			}
+			fmt.Fprintln(os.Stdout, dir)
 		default:
 			err := execute(com, args)
 			if err != nil {
