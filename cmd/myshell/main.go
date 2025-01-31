@@ -95,12 +95,12 @@ func parseInput(input string) []string {
 
 		switch {
 		case escapeNext:
-			// Handle escaped character
+			// Handle escaped character (treat it as a literal)
 			token.WriteByte(char)
 			escapeNext = false
 
-		case char == '\\':
-			// Escape the next character
+		case char == '\\' && !inSingleQuote:
+			// Escape the next character (only if not inside single quotes)
 			escapeNext = true
 
 		case char == '\'' && !inDoubleQuote && !escapeNext:
@@ -111,7 +111,7 @@ func parseInput(input string) []string {
 			// Toggle double quote state (only if not inside single quotes and not escaped)
 			inDoubleQuote = !inDoubleQuote
 
-		case char == ' ' && !inSingleQuote && !inDoubleQuote:
+		case char == ' ' && !inSingleQuote && !inDoubleQuote && !escapeNext:
 			// End of token, add to args
 			if token.Len() > 0 {
 				args = append(args, token.String())
