@@ -87,20 +87,37 @@ func parseInput(input string) []string {
 	var args []string
 	var token strings.Builder
 	inSingleQuote := false
+	inDoubleQuote := false
+	escapeNext := false
 
 	for i := 0; i < len(input); i++ {
 		char := input[i]
 
 		switch {
-		case char == '\'':
-			// Toggle single quote state
+		case escapeNext:
+			// Handle escaped character
+			token.WriteByte(char)
+			escapeNext = false
+
+		case char == '\\':
+			// Escape the next character
+			escapeNext = true
+
+		case char == '\'' && !inDoubleQuote && !escapeNext:
+			// Toggle single quote state (only if not inside double quotes and not escaped)
 			inSingleQuote = !inSingleQuote
-		case char == ' ' && !inSingleQuote:
+
+		case char == '"' && !inSingleQuote && !escapeNext:
+			// Toggle double quote state (only if not inside single quotes and not escaped)
+			inDoubleQuote = !inDoubleQuote
+
+		case char == ' ' && !inSingleQuote && !inDoubleQuote:
 			// End of token, add to args
 			if token.Len() > 0 {
 				args = append(args, token.String())
 				token.Reset()
 			}
+
 		default:
 			// Add character to current token
 			token.WriteByte(char)
