@@ -26,7 +26,7 @@ func main() {
 
 		com := parts[0]
 		args := parts[1:]
-
+		print(args)
 		switch com {
 		case "exit":
 			exitCode, err := strconv.Atoi(args[0])
