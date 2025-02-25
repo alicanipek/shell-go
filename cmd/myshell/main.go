@@ -115,6 +115,12 @@ func parseInput(input string) ([]string, *os.File, *os.File) {
 		file = createFile(strings.TrimSpace(splitInput[1]), os.O_APPEND|os.O_CREATE|os.O_WRONLY)
 		error = os.Stderr
 		command = strings.TrimSpace(splitInput[0])
+	} else if strings.Contains(input, "2>>") {
+		splitInput = strings.Split(input, "2>>")
+		e := createFile(strings.TrimSpace(splitInput[1]), os.O_APPEND|os.O_CREATE|os.O_WRONLY)
+		error = e
+		file = os.Stdout
+		command = strings.TrimSpace(splitInput[0])
 	} else if strings.Contains(input, "2>") {
 		splitInput = strings.Split(input, "2>")
 		e := createFile(strings.TrimSpace(splitInput[1]), os.O_CREATE|os.O_WRONLY|os.O_TRUNC)
