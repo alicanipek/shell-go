@@ -14,7 +14,10 @@ import (
 func main() {
 	builtins := []string{"type", "exit", "echo", "pwd"}
 
-	// commands := [2]string{"ls -1 nonexistent 2> /tmp/qux/bar.md", "cat /tmp/qux/bar.md"}
+	// commands := [3]string{
+	// 	"echo 'Hello Maria' 1>> /tmp/foo/baz.md",
+	// 	"echo 'Hello Emily' 1>> /tmp/foo/baz.md",
+	// 	"cat /tmp/foo/baz.md"}
 	// for i := 0; i < len(commands); i++ {
 	for {
 		// Uncomment this block to pass the first stage
@@ -107,20 +110,30 @@ func parseInput(input string) ([]string, *os.File, *os.File) {
 	inDoubleQuote := false
 	escapeNext := false
 	var splitInput []string
-	if strings.Contains(input, "1>") {
-		splitInput = strings.Split(input, "1>")
-		file = createFile(strings.TrimSpace(splitInput[1]))
+	if strings.Contains(input, "1>>") {
+		splitInput = strings.Split(input, "1>>")
+		file = createFile(strings.TrimSpace(splitInput[1]), os.O_APPEND|os.O_CREATE|os.O_WRONLY)
 		error = os.Stderr
 		command = strings.TrimSpace(splitInput[0])
 	} else if strings.Contains(input, "2>") {
 		splitInput = strings.Split(input, "2>")
-		e := createFile(strings.TrimSpace(splitInput[1]))
+		e := createFile(strings.TrimSpace(splitInput[1]), os.O_CREATE|os.O_WRONLY|os.O_TRUNC)
 		error = e
 		file = os.Stdout
 		command = strings.TrimSpace(splitInput[0])
+	} else if strings.Contains(input, ">>") {
+		splitInput = strings.Split(input, ">>")
+		file = createFile(strings.TrimSpace(splitInput[1]), os.O_APPEND|os.O_CREATE|os.O_WRONLY)
+		error = os.Stderr
+		command = strings.TrimSpace(splitInput[0])
+	} else if strings.Contains(input, "1>") {
+		splitInput = strings.Split(input, "1>")
+		file = createFile(strings.TrimSpace(splitInput[1]), os.O_CREATE|os.O_WRONLY|os.O_TRUNC)
+		error = os.Stderr
+		command = strings.TrimSpace(splitInput[0])
 	} else if strings.Contains(input, ">") {
 		splitInput = strings.Split(input, ">")
-		file = createFile(strings.TrimSpace(splitInput[1]))
+		file = createFile(strings.TrimSpace(splitInput[1]), os.O_CREATE|os.O_WRONLY|os.O_TRUNC)
 		error = os.Stderr
 		command = strings.TrimSpace(splitInput[0])
 	} else {
@@ -183,7 +196,7 @@ func parseInput(input string) ([]string, *os.File, *os.File) {
 	return args, file, error
 }
 
-func createFile(path string) *os.File {
+func createFile(path string, flag int) *os.File {
 	abs, _ := filepath.Abs(path)
 	parentDir := filepath.Dir(abs)
 	err := os.MkdirAll(parentDir, 0755) // 0755 is the permission mode (rwxr-xr-x)
@@ -193,7 +206,7 @@ func createFile(path string) *os.File {
 	}
 
 	// Create the file
-	e, err := os.OpenFile(abs, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
+	e, err := os.OpenFile(abs, flag, 0666)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 	}
