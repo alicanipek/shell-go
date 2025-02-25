@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -12,6 +13,9 @@ import (
 
 func main() {
 	builtins := []string{"type", "exit", "echo", "pwd"}
+
+	// commands := [2]string{"ls -1 nonexistent 2> /tmp/qux/bar.md", "cat /tmp/qux/bar.md"}
+	// for i := 0; i < len(commands); i++ {
 	for {
 		// Uncomment this block to pass the first stage
 		fmt.Fprint(os.Stdout, "$ ")
@@ -23,7 +27,8 @@ func main() {
 		}
 		command = strings.Trim(command, "\n")
 
-		parts, file := parseInput(command)
+		// command := commands[i]
+		parts, file, error := parseInput(command)
 
 		com := parts[0]
 		args := parts[1:]
@@ -65,33 +70,37 @@ func main() {
 			if err != nil {
 				fmt.Println("cd: " + args[0] + ": No such file or directory")
 			}
-		case "cat":
-			execute(com, args, file)
+		case "cat", "ls":
+			execute(com, args, file, error)
 		default:
-			err := execute(com, args, file)
+			err := execute(com, args, file, error)
 			if err != nil {
-				fmt.Fprintln(os.Stdout, command+": command not found")
+				fmt.Fprintln(error, command+": command not found")
 			}
 		}
 		if file != nil && file != os.Stdout {
 			file.Close()
 		}
 		file = os.Stdout
+		if error != nil && error != os.Stderr {
+			error.Close()
+		}
+		error = os.Stderr
 	}
 }
 
-func execute(executable string, args []string, file *os.File) error {
+func execute(executable string, args []string, file *os.File, error *os.File) error {
 	cmd := exec.Command(executable, args...)
-	cmd.Stderr = os.Stderr
+	cmd.Stderr = error
 	cmd.Stdout = file
 	er := cmd.Run()
-
 	return er
 }
 
-func parseInput(input string) ([]string, *os.File) {
+func parseInput(input string) ([]string, *os.File, *os.File) {
 	var args []string
 	var file *os.File
+	var error *os.File
 	command := input
 	var token strings.Builder
 	inSingleQuote := false
@@ -100,28 +109,23 @@ func parseInput(input string) ([]string, *os.File) {
 	var splitInput []string
 	if strings.Contains(input, "1>") {
 		splitInput = strings.Split(input, "1>")
+		file = createFile(strings.TrimSpace(splitInput[1]))
+		error = os.Stderr
+		command = strings.TrimSpace(splitInput[0])
+	} else if strings.Contains(input, "2>") {
+		splitInput = strings.Split(input, "2>")
+		e := createFile(strings.TrimSpace(splitInput[1]))
+		error = e
+		file = os.Stdout
+		command = strings.TrimSpace(splitInput[0])
 	} else if strings.Contains(input, ">") {
 		splitInput = strings.Split(input, ">")
-	}
-	if len(splitInput) > 1 {
-		// abs, _ := filepath.Abs(strings.TrimSpace(splitInput[1]))
-		// parentDir := filepath.Dir(abs)
-		// err := os.MkdirAll(parentDir, 0755) // 0755 is the permission mode (rwxr-xr-x)
-		// if err != nil {
-		// 	fmt.Println("Error creating directories:", err)
-		// 	os.Exit(1)
-		// }
-
-		// // Create the file
-		// f, err := os.Create(abs)
-		// if err != nil {
-		// 	fmt.Println("Error creating files:", err)
-		// 	os.Exit(1)
-		// }
-		file, _ = os.OpenFile(strings.TrimSpace(splitInput[1]), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
+		file = createFile(strings.TrimSpace(splitInput[1]))
+		error = os.Stderr
 		command = strings.TrimSpace(splitInput[0])
 	} else {
 		file = os.Stdout
+		error = os.Stderr
 	}
 	for i := range len(command) {
 		char := input[i]
@@ -176,7 +180,24 @@ func parseInput(input string) ([]string, *os.File) {
 		args = append(args, token.String())
 	}
 
-	return args, file
+	return args, file, error
+}
+
+func createFile(path string) *os.File {
+	abs, _ := filepath.Abs(path)
+	parentDir := filepath.Dir(abs)
+	err := os.MkdirAll(parentDir, 0755) // 0755 is the permission mode (rwxr-xr-x)
+	if err != nil {
+		fmt.Println("Error creating directories:", err)
+		os.Exit(1)
+	}
+
+	// Create the file
+	e, err := os.OpenFile(abs, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+	}
+	return e
 }
 
 func isExecutableInPath(executable string) string {
