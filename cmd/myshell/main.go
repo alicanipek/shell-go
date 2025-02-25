@@ -101,7 +101,22 @@ func parseInput(input string) []string {
 
 		case char == '\\' && !inSingleQuote:
 			// Escape the next character (only if not inside single quotes)
-			escapeNext = true
+			if inDoubleQuote {
+				// Inside double quotes, only escape ", $, \, and `
+				nextChar := byte(0)
+				if i+1 < len(input) {
+					nextChar = input[i+1]
+				}
+				if nextChar == '"' || nextChar == '\\' || nextChar == '$' || nextChar == '`' {
+					escapeNext = true
+				} else {
+					// Treat the backslash as a literal
+					token.WriteByte(char)
+				}
+			} else {
+				// Outside quotes, escape the next character
+				escapeNext = true
+			}
 
 		case char == '\'' && !inDoubleQuote && !escapeNext:
 			// Toggle single quote state (only if not inside double quotes and not escaped)
