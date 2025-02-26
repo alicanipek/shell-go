@@ -3,16 +3,20 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
+
+	"golang.org/x/term"
 )
 
+var builtins = []string{"type", "exit", "echo", "pwd"}
+
 func main() {
-	builtins := []string{"type", "exit", "echo", "pwd"}
 
 	// commands := [3]string{
 	// 	"echo 'Hello Maria' 1>> /tmp/foo/baz.md",
@@ -20,15 +24,10 @@ func main() {
 	// 	"cat /tmp/foo/baz.md"}
 	// for i := 0; i < len(commands); i++ {
 	for {
-		// Uncomment this block to pass the first stage
 		fmt.Fprint(os.Stdout, "$ ")
 
-		// Wait for user input
-		command, err := bufio.NewReader(os.Stdin).ReadString('\n')
-		if err != nil {
-			os.Exit(1)
-		}
-		command = strings.Trim(command, "\n")
+		input := readInput(os.Stdin)
+		command := strings.Trim(string(input), "\n")
 
 		// command := commands[i]
 		parts, file, error := parseInput(command)
@@ -90,6 +89,53 @@ func main() {
 		}
 		error = os.Stderr
 	}
+}
+
+func readInput(rd io.Reader) (input string) {
+
+	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
+	if err != nil {
+		panic(err)
+	}
+	defer term.Restore(int(os.Stdin.Fd()), oldState)
+	reader := bufio.NewReader(rd)
+	// Uncomment this block to pass the first stage
+
+	// Wait for user input
+
+	for {
+		b, _, err := reader.ReadRune()
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+
+		if b == '\x03' { // Ctrl+C
+			os.Exit(0)
+		} else if b == '\n' || b == '\r' {
+			fmt.Fprint(os.Stdout, "\r\n")
+			break
+		} else if b == '\x7F' { // Backspace
+			if length := len(input); length > 0 {
+				input = input[:length-1]
+				fmt.Fprint(os.Stdout, "\b \b")
+			}
+		} else if b == '\t' {
+			for _, v := range builtins {
+				after, found := strings.CutPrefix(v, input)
+				if found {
+					fmt.Fprint(os.Stdout, after+" ")
+					input = v
+					break
+				}
+			}
+
+		} else {
+			input += string(b)
+			fmt.Fprint(os.Stdout, string(b))
+		}
+	}
+	return
 }
 
 func execute(executable string, args []string, file *os.File, error *os.File) error {
