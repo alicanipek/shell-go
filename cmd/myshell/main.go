@@ -128,8 +128,16 @@ func readInput(rd io.Reader) (input string) {
 			slices.Sort(filtered)
 			if len(filtered) > 1 {
 				if tabcount == 0 {
-					fmt.Fprint(os.Stdout, "\a")
-					tabcount++
+					p_cmd := find_common_name(filtered)
+					if p_cmd != input {
+						input = p_cmd
+						fmt.Print("\r\x1b[K")
+						fmt.Printf("$ %s", input)
+					} else {
+						tabcount++
+						fmt.Print("\a")
+					}
+
 				} else {
 					term.Restore(fd, oldState)
 					matching := strings.Join(filtered, "  ")
@@ -181,6 +189,29 @@ func concat(slice1 []string, slice2 []string) []string {
 		concatted = append(concatted, v)
 	}
 	return concatted
+}
+
+func find_common_name(cmd_list []string) string {
+	common_cmd := ""
+	is_common := true
+	for i := 0; is_common; i++ {
+		var curr_letter byte
+		for j := 0; j < len(cmd_list); j++ {
+			if i >= len(cmd_list[j]) {
+				is_common = false
+				break
+			} else if j == 0 {
+				curr_letter = cmd_list[j][i]
+			} else if curr_letter != cmd_list[j][i] {
+				is_common = false
+				break
+			}
+		}
+		if is_common {
+			common_cmd += string(curr_letter)
+		}
+	}
+	return common_cmd
 }
 
 func filter(executables []string, input string) []string {
