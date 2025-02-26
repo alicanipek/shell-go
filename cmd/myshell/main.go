@@ -131,6 +131,8 @@ func readInput(rd io.Reader) (input string) {
 					fmt.Fprint(os.Stdout, after+" "+strings.Join(splitted[1:], " "))
 					input = v + " " + strings.Join(splitted[1:], " ")
 					break
+				} else {
+					fmt.Fprint(os.Stdout, "\a")
 				}
 			}
 
