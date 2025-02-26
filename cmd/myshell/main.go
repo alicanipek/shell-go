@@ -92,17 +92,17 @@ func main() {
 }
 
 func readInput(rd io.Reader) (input string) {
-
-	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
+	fd := int(os.Stdin.Fd())
+	oldState, err := term.MakeRaw(fd)
 	if err != nil {
 		panic(err)
 	}
-	defer term.Restore(int(os.Stdin.Fd()), oldState)
+	defer term.Restore(fd, oldState)
 	reader := bufio.NewReader(rd)
 	// Uncomment this block to pass the first stage
 
 	// Wait for user input
-
+	tabcount := 0
 	for {
 		b, _, err := reader.ReadRune()
 		if err != nil {
@@ -122,29 +122,76 @@ func readInput(rd io.Reader) (input string) {
 			}
 		} else if b == '\t' {
 			executablesInPath, _ := getExecutablesInPath()
-			execs := slices.Concat(builtins, executablesInPath)
-
-			for _, v := range execs {
-				splitted := strings.Split(input, " ")
-				after, found := strings.CutPrefix(v, splitted[0])
-				if found {
-					for i := 0; i < len(splitted[1:]); i++ {
-						fmt.Fprint(os.Stdout, "\b")
-					}
-					fmt.Fprint(os.Stdout, after+" "+strings.Join(splitted[1:], " "))
-					input = v + " " + strings.Join(splitted[1:], " ")
-					break
-				} else {
+			// execs := slices.Concat(builtins, executablesInPath)
+			execs := concat(builtins, executablesInPath)
+			filtered := filter(execs, input)
+			slices.Sort(filtered)
+			if len(filtered) > 1 {
+				if tabcount == 0 {
 					fmt.Fprint(os.Stdout, "\a")
+					tabcount++
+				} else {
+					term.Restore(fd, oldState)
+					matching := strings.Join(filtered, "  ")
+					fmt.Fprint(os.Stdout, "\r\n")
+					fmt.Fprint(os.Stdout, matching)
+					fmt.Fprint(os.Stdout, "\r\n")
+					fmt.Fprint(os.Stdout, "$ ")
+					term.MakeRaw(fd)
+					fmt.Fprint(os.Stdout, input)
+					tabcount = 0
+				}
+			} else {
+				for _, v := range execs {
+					splitted := strings.Split(input, " ")
+
+					after, found := strings.CutPrefix(v, splitted[0])
+					if found {
+						for i := 0; i < len(splitted[1:]); i++ {
+							fmt.Fprint(os.Stdout, "\b")
+						}
+						fmt.Fprint(os.Stdout, after+" "+strings.Join(splitted[1:], " "))
+						input = v + " " + strings.Join(splitted[1:], " ")
+						break
+					} else {
+						fmt.Fprint(os.Stdout, "\a")
+					}
 				}
 			}
-
 		} else {
 			input += string(b)
 			fmt.Fprint(os.Stdout, string(b))
 		}
 	}
 	return
+}
+
+func concat(slice1 []string, slice2 []string) []string {
+	var concatted []string
+	for _, v := range slice1 {
+		if slices.Contains(concatted, v) {
+			continue
+		}
+		concatted = append(concatted, v)
+	}
+	for _, v := range slice2 {
+		if slices.Contains(concatted, v) {
+			continue
+		}
+		concatted = append(concatted, v)
+	}
+	return concatted
+}
+
+func filter(executables []string, input string) []string {
+	var filtered []string
+	for _, v := range executables {
+		_, found := strings.CutPrefix(v, input)
+		if found {
+			filtered = append(filtered, v)
+		}
+	}
+	return filtered
 }
 
 func execute(executable string, args []string, file *os.File, error *os.File) error {
