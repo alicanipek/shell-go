@@ -121,7 +121,10 @@ func readInput(rd io.Reader) (input string) {
 				fmt.Fprint(os.Stdout, "\b \b")
 			}
 		} else if b == '\t' {
-			for _, v := range builtins {
+			executablesInPath, _ := getExecutablesInPath()
+			execs := slices.Concat(builtins, executablesInPath)
+
+			for _, v := range execs {
 				splitted := strings.Split(input, " ")
 				after, found := strings.CutPrefix(v, splitted[0])
 				if found {
@@ -282,4 +285,66 @@ func isExecutableInPath(executable string) string {
 		}
 	}
 	return ""
+}
+
+func getExecutablesInPath() ([]string, error) {
+	// Get the PATH environment variable
+	pathEnv := os.Getenv("PATH")
+	if pathEnv == "" {
+		return nil, fmt.Errorf("PATH environment variable is not set")
+	}
+
+	// Split the PATH into individual directories
+	pathDirs := filepath.SplitList(pathEnv)
+
+	// Create a map to store unique executables
+	executables := make(map[string]bool)
+
+	// Scan each directory in PATH
+	for _, dir := range pathDirs {
+		// Open the directory
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			// Skip directories that cannot be read
+			continue
+		}
+
+		// Check each entry in the directory
+		for _, entry := range entries {
+			// Skip directories and non-executable files
+			if entry.IsDir() {
+				continue
+			}
+
+			// Get the full path of the file
+			fullPath := filepath.Join(dir, entry.Name())
+
+			// Check if the file is executable
+			if isExecutable(fullPath) {
+				executables[entry.Name()] = true
+			}
+		}
+	}
+
+	// Convert the map to a slice of executable names
+	var result []string
+	for exe := range executables {
+		result = append(result, exe)
+	}
+
+	return result, nil
+}
+
+// isExecutable checks if a file is executable
+func isExecutable(path string) bool {
+	// Use os.Stat to get file info
+	info, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+
+	// Check if the file is executable by anyone
+	// On Unix-like systems, check the executable bit
+	// On Windows, assume all files are executable
+	return info.Mode().Perm()&0111 != 0 || strings.HasSuffix(strings.ToLower(path), ".exe")
 }
