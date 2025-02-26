@@ -122,10 +122,14 @@ func readInput(rd io.Reader) (input string) {
 			}
 		} else if b == '\t' {
 			for _, v := range builtins {
-				after, found := strings.CutPrefix(v, input)
+				splitted := strings.Split(input, " ")
+				after, found := strings.CutPrefix(v, splitted[0])
 				if found {
-					fmt.Fprint(os.Stdout, after+" ")
-					input = v
+					for i := 0; i < len(splitted[1:]); i++ {
+						fmt.Fprint(os.Stdout, "\b")
+					}
+					fmt.Fprint(os.Stdout, after+" "+strings.Join(splitted[1:], " "))
+					input = v + " " + strings.Join(splitted[1:], " ")
 					break
 				}
 			}
