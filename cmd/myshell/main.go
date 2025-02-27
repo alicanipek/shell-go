@@ -17,19 +17,12 @@ import (
 var builtins = []string{"type", "exit", "echo", "pwd"}
 
 func main() {
-
-	// commands := [3]string{
-	// 	"echo 'Hello Maria' 1>> /tmp/foo/baz.md",
-	// 	"echo 'Hello Emily' 1>> /tmp/foo/baz.md",
-	// 	"cat /tmp/foo/baz.md"}
-	// for i := 0; i < len(commands); i++ {
 	for {
 		fmt.Fprint(os.Stdout, "$ ")
 
 		input := readInput(os.Stdin)
 		command := strings.Trim(string(input), "\n")
 
-		// command := commands[i]
 		parts, file, error := parseInput(command)
 
 		com := parts[0]
@@ -110,19 +103,18 @@ func readInput(rd io.Reader) (input string) {
 			continue
 		}
 
-		if b == '\x03' { // Ctrl+C
+		if b == '\x03' {
 			os.Exit(0)
 		} else if b == '\n' || b == '\r' {
 			fmt.Fprint(os.Stdout, "\r\n")
 			break
-		} else if b == '\x7F' { // Backspace
+		} else if b == '\x7F' {
 			if length := len(input); length > 0 {
 				input = input[:length-1]
 				fmt.Fprint(os.Stdout, "\b \b")
 			}
 		} else if b == '\t' {
 			executablesInPath, _ := getExecutablesInPath()
-			// execs := slices.Concat(builtins, executablesInPath)
 			execs := concat(builtins, executablesInPath)
 			filtered := filter(execs, input)
 			slices.Sort(filtered)
@@ -284,14 +276,11 @@ func parseInput(input string) ([]string, *os.File, *os.File) {
 
 		switch {
 		case escapeNext:
-			// Handle escaped character (treat it as a literal)
 			token.WriteByte(char)
 			escapeNext = false
 
 		case char == '\\' && !inSingleQuote:
-			// Escape the next character (only if not inside single quotes)
 			if inDoubleQuote {
-				// Inside double quotes, only escape ", $, \, and `
 				nextChar := byte(0)
 				if i+1 < len(input) {
 					nextChar = input[i+1]
@@ -299,35 +288,28 @@ func parseInput(input string) ([]string, *os.File, *os.File) {
 				if nextChar == '"' || nextChar == '\\' || nextChar == '$' || nextChar == '`' {
 					escapeNext = true
 				} else {
-					// Treat the backslash as a literal
 					token.WriteByte(char)
 				}
 			} else {
-				// Outside quotes, escape the next character
 				escapeNext = true
 			}
 
 		case char == '\'' && !inDoubleQuote && !escapeNext:
-			// Toggle single quote state (only if not inside double quotes and not escaped)
 			inSingleQuote = !inSingleQuote
 
 		case char == '"' && !inSingleQuote && !escapeNext:
-			// Toggle double quote state (only if not inside single quotes and not escaped)
 			inDoubleQuote = !inDoubleQuote
 
 		case char == ' ' && !inSingleQuote && !inDoubleQuote && !escapeNext:
-			// End of token, add to args
 			if token.Len() > 0 {
 				args = append(args, token.String())
 				token.Reset()
 			}
 		default:
-			// Add character to current token
 			token.WriteByte(char)
 		}
 	}
 
-	// Add the last token if it exists
 	if token.Len() > 0 {
 		args = append(args, token.String())
 	}
@@ -338,13 +320,12 @@ func parseInput(input string) ([]string, *os.File, *os.File) {
 func createFile(path string, flag int) *os.File {
 	abs, _ := filepath.Abs(path)
 	parentDir := filepath.Dir(abs)
-	err := os.MkdirAll(parentDir, 0755) // 0755 is the permission mode (rwxr-xr-x)
+	err := os.MkdirAll(parentDir, 0755)
 	if err != nil {
 		fmt.Println("Error creating directories:", err)
 		os.Exit(1)
 	}
 
-	// Create the file
 	e, err := os.OpenFile(abs, flag, 0666)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -366,45 +347,34 @@ func isExecutableInPath(executable string) string {
 }
 
 func getExecutablesInPath() ([]string, error) {
-	// Get the PATH environment variable
 	pathEnv := os.Getenv("PATH")
 	if pathEnv == "" {
 		return nil, fmt.Errorf("PATH environment variable is not set")
 	}
 
-	// Split the PATH into individual directories
 	pathDirs := filepath.SplitList(pathEnv)
 
-	// Create a map to store unique executables
 	executables := make(map[string]bool)
 
-	// Scan each directory in PATH
 	for _, dir := range pathDirs {
-		// Open the directory
 		entries, err := os.ReadDir(dir)
 		if err != nil {
-			// Skip directories that cannot be read
 			continue
 		}
 
-		// Check each entry in the directory
 		for _, entry := range entries {
-			// Skip directories and non-executable files
 			if entry.IsDir() {
 				continue
 			}
 
-			// Get the full path of the file
 			fullPath := filepath.Join(dir, entry.Name())
 
-			// Check if the file is executable
 			if isExecutable(fullPath) {
 				executables[entry.Name()] = true
 			}
 		}
 	}
 
-	// Convert the map to a slice of executable names
 	var result []string
 	for exe := range executables {
 		result = append(result, exe)
@@ -413,16 +383,11 @@ func getExecutablesInPath() ([]string, error) {
 	return result, nil
 }
 
-// isExecutable checks if a file is executable
 func isExecutable(path string) bool {
-	// Use os.Stat to get file info
 	info, err := os.Stat(path)
 	if err != nil {
 		return false
 	}
 
-	// Check if the file is executable by anyone
-	// On Unix-like systems, check the executable bit
-	// On Windows, assume all files are executable
 	return info.Mode().Perm()&0111 != 0 || strings.HasSuffix(strings.ToLower(path), ".exe")
 }
