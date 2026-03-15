@@ -10,13 +10,25 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 
 	"golang.org/x/term"
 )
 
 var builtins = []string{"type", "exit", "echo", "pwd"}
 
+var cachedExecutables []string
+var cacheReady sync.WaitGroup
+var execs []string
+
 func main() {
+	cacheReady.Add(1)
+	go func() {
+		defer cacheReady.Done()
+		cachedExecutables, _ = getExecutablesInPath()
+		execs = concat(builtins, cachedExecutables)
+	}()
+
 	for {
 		fmt.Fprint(os.Stdout, "$ ")
 
@@ -30,6 +42,9 @@ func main() {
 
 		switch com {
 		case "exit":
+			if len(args) == 0 {
+				os.Exit(0)
+			}
 			exitCode, err := strconv.Atoi(args[0])
 			if err != nil {
 				os.Exit(1)
@@ -114,53 +129,88 @@ func readInput(rd io.Reader) (input string) {
 				fmt.Fprint(os.Stdout, "\b \b")
 			}
 		} else if b == '\t' {
-			executablesInPath, _ := getExecutablesInPath()
-			execs := concat(builtins, executablesInPath)
-			filtered := filter(execs, input)
-			slices.Sort(filtered)
-			if len(filtered) > 1 {
-				if tabcount == 0 {
-					p_cmd := find_common_name(filtered)
-					if p_cmd != input {
-						input = p_cmd
-						fmt.Print("\r\x1b[K")
-						fmt.Printf("$ %s", input)
-					} else {
-						tabcount++
-						fmt.Print("\a")
-					}
-
+			cacheReady.Wait()
+			if strings.Contains(input, " ") {
+				firstCharacterAfterSpace := strings.LastIndex(input, " ") + 1
+				filePart := ""
+				if firstCharacterAfterSpace < len(input) {
+					filePart = input[firstCharacterAfterSpace:]
+					input = input[:firstCharacterAfterSpace]
+				}
+				files, _ := filesInCurrentDir()
+				filtered := filter(files, filePart)
+				slices.Sort(filtered)
+				if len(filtered) == 0 {
+					input += filePart
+					fmt.Print("\a")
+				} else if len(filtered) == 1 {
+					input += filtered[0] + " "
+					fmt.Print("\r\x1b[K")
+					fmt.Printf("$ %s", input)
 				} else {
-					term.Restore(fd, oldState)
 					matching := strings.Join(filtered, "  ")
+					input += filePart
+					term.Restore(fd, oldState)
 					fmt.Fprint(os.Stdout, "\r\n")
 					fmt.Fprint(os.Stdout, matching)
 					fmt.Fprint(os.Stdout, "\r\n")
 					fmt.Fprint(os.Stdout, "$ ")
 					term.MakeRaw(fd)
 					fmt.Fprint(os.Stdout, input)
-					tabcount = 0
 				}
+				continue
 			} else {
-				for _, v := range execs {
-					splitted := strings.Split(input, " ")
-
-					after, found := strings.CutPrefix(v, splitted[0])
-					if found {
-						for i := 0; i < len(splitted[1:]); i++ {
-							fmt.Fprint(os.Stdout, "\b")
+				filtered := filter(execs, input)
+				slices.Sort(filtered)
+				if len(filtered) > 1 {
+					if tabcount == 0 {
+						p_cmd := find_common_name(filtered)
+						if p_cmd != input {
+							input = p_cmd
+							fmt.Print("\r\x1b[K")
+							fmt.Printf("$ %s", input)
+						} else {
+							tabcount++
+							fmt.Print("\a")
 						}
-						fmt.Fprint(os.Stdout, after+" "+strings.Join(splitted[1:], " "))
-						input = v + " " + strings.Join(splitted[1:], " ")
-						break
+
 					} else {
+						term.Restore(fd, oldState)
+						matching := strings.Join(filtered, "  ")
+						fmt.Fprint(os.Stdout, "\r\n")
+						fmt.Fprint(os.Stdout, matching)
+						fmt.Fprint(os.Stdout, "\r\n")
+						fmt.Fprint(os.Stdout, "$ ")
+						term.MakeRaw(fd)
+						fmt.Fprint(os.Stdout, input)
+						tabcount = 0
+					}
+				} else {
+					matched := false
+					for _, v := range execs {
+						splitted := strings.Split(input, " ")
+
+						after, found := strings.CutPrefix(v, splitted[0])
+						if found {
+							for i := 0; i < len(splitted[1:]); i++ {
+								fmt.Fprint(os.Stdout, "\b")
+							}
+							fmt.Fprint(os.Stdout, after+" "+strings.Join(splitted[1:], " "))
+							input = v + " " + strings.Join(splitted[1:], " ")
+							matched = true
+							break
+						}
+					}
+					if !matched {
 						fmt.Fprint(os.Stdout, "\a")
 					}
 				}
 			}
 		} else {
-			input += string(b)
-			fmt.Fprint(os.Stdout, string(b))
+			tabcount = 0
+			s := string(b)
+			input += s
+			fmt.Fprint(os.Stdout, s)
 		}
 	}
 	return
@@ -184,7 +234,7 @@ func concat(slice1 []string, slice2 []string) []string {
 }
 
 func find_common_name(cmd_list []string) string {
-	common_cmd := ""
+	var common_cmd strings.Builder
 	is_common := true
 	for i := 0; is_common; i++ {
 		var curr_letter byte
@@ -200,10 +250,10 @@ func find_common_name(cmd_list []string) string {
 			}
 		}
 		if is_common {
-			common_cmd += string(curr_letter)
+			common_cmd.WriteString(string(curr_letter))
 		}
 	}
-	return common_cmd
+	return common_cmd.String()
 }
 
 func filter(executables []string, input string) []string {
@@ -338,9 +388,10 @@ func isExecutableInPath(executable string) string {
 	paths := strings.Split(path, ":")
 	for _, path := range paths {
 		exec := path + "/" + executable
-		if _, err := os.Stat(exec); err == nil {
-
-			return executable + " is " + exec
+		if info, err := os.Stat(exec); err == nil {
+			if info.Mode()&0111 != 0 {
+				return executable + " is " + exec
+			}
 		}
 	}
 	return ""
@@ -354,40 +405,77 @@ func getExecutablesInPath() ([]string, error) {
 
 	pathDirs := filepath.SplitList(pathEnv)
 
-	executables := make(map[string]bool)
+	var mu sync.Mutex
+	executables := make(map[string]struct{})
 
+	var wg sync.WaitGroup
 	for _, dir := range pathDirs {
-		entries, err := os.ReadDir(dir)
-		if err != nil {
+		if strings.HasPrefix(dir, "/mnt/") {
 			continue
 		}
-
-		for _, entry := range entries {
-			if entry.IsDir() {
-				continue
+		wg.Add(1)
+		go func(d string) {
+			defer wg.Done()
+			entries, err := os.ReadDir(d)
+			if err != nil {
+				return
 			}
-
-			fullPath := filepath.Join(dir, entry.Name())
-
-			if isExecutable(fullPath) {
-				executables[entry.Name()] = true
+			var local []string
+			for _, entry := range entries {
+				t := entry.Type()
+				if t.IsDir() {
+					continue
+				}
+				var perm os.FileMode
+				if t.IsRegular() {
+					// entry.Info() reuses data already fetched by ReadDir — no extra syscall
+					info, err := entry.Info()
+					if err != nil {
+						continue
+					}
+					perm = info.Mode().Perm()
+				} else {
+					// Symlinks and other types need os.Stat to follow the link
+					info, err := os.Stat(filepath.Join(d, entry.Name()))
+					if err != nil {
+						continue
+					}
+					perm = info.Mode().Perm()
+				}
+				if isExecutable(entry.Name(), perm) {
+					local = append(local, entry.Name())
+				}
 			}
-		}
+			mu.Lock()
+			for _, name := range local {
+				executables[name] = struct{}{}
+			}
+			mu.Unlock()
+		}(dir)
 	}
+	wg.Wait()
 
-	var result []string
+	result := make([]string, 0, len(executables))
 	for exe := range executables {
 		result = append(result, exe)
 	}
-
 	return result, nil
 }
 
-func isExecutable(path string) bool {
-	info, err := os.Stat(path)
-	if err != nil {
-		return false
-	}
+func isExecutable(name string, perm os.FileMode) bool {
+	return perm&0111 != 0 || strings.HasSuffix(strings.ToLower(name), ".exe")
+}
 
-	return info.Mode().Perm()&0111 != 0 || strings.HasSuffix(strings.ToLower(path), ".exe")
+func filesInCurrentDir() ([]string, error) {
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		return nil, err
+	}
+	var files []string
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			files = append(files, entry.Name())
+		}
+	}
+	return files, nil
 }
