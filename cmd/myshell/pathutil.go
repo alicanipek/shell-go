@@ -85,7 +85,7 @@ func getFilesAndDirectories(folder string) ([]string, []string, error) {
 	var dirs []string
 	for _, entry := range entries {
 		if entry.IsDir() {
-			dirs = append(dirs, entry.Name()+"/")
+			dirs = append(dirs, entry.Name())
 		} else {
 			files = append(files, entry.Name())
 		}

@@ -86,82 +86,91 @@ func (s *Shell) completeFilePath(fd int, oldState *term.State, input *string, ta
 	files, dirs, _ := getFilesAndDirectories(folder)
 	matches := filter(files, filePart)
 	dirMatches := filter(dirs, filePart)
-	slices.Sort(matches)
-	slices.Sort(dirMatches)
 
-	if *tabCount == 0 && len(matches) == 0 && len(dirMatches) == 0 {
+	allMatches := append(append([]string{}, dirMatches...), matches...)
+	slices.Sort(allMatches)
+	if len(allMatches) == 0 {
 		fmt.Print("\a")
 		return
-	} else if *tabCount == 0 && len(matches) == 1 && len(dirMatches) == 0 {
-		*input = cmdPart + folderPrefix + matches[0] + " "
-		fmt.Printf("\r\x1b[K$ %s", *input)
-		*tabCount = 0
-		return
-	} else if *tabCount == 0 && len(matches) == 0 && len(dirMatches) == 1 {
-		*input = cmdPart + folderPrefix + dirMatches[0]
-		fmt.Printf("\r\x1b[K$ %s", *input)
-		*tabCount = 0
-		return
-	} else {
-		if *tabCount == 0 {
-			fmt.Print("\a")
-			(*tabCount)++
-			return
-		} else {
-			*input = cmdPart + folderPrefix + filePart
-			term.Restore(fd, oldState)
-			dirMatchesString := strings.Join(dirMatches, " ")
-			fileMatchesString := strings.Join(matches, "  ")
-			fmt.Fprintf(os.Stdout, "\r\n%s\r\n$ ", strings.TrimSpace(dirMatchesString+" "+fileMatchesString))
-			term.MakeRaw(fd)
-			fmt.Fprint(os.Stdout, *input)
-			*tabCount = 0
-			return
-		}
-
 	}
 
+	// Single exact match: append trailing separator
+	if len(allMatches) == 1 {
+		suffix := " "
+		if len(matches) == 0 { // directory
+			suffix = "/"
+		}
+		*input = cmdPart + folderPrefix + allMatches[0] + suffix
+		fmt.Printf("\r\x1b[K$ %s", *input)
+		*tabCount = 0
+		return
+	}
+
+	// Always complete to LCP immediately (resets tabCount if progress was made)
+	if common := findCommonPrefix(allMatches); common != filePart {
+		*input = cmdPart + folderPrefix + common
+		fmt.Printf("\r\x1b[K$ %s", *input)
+		*tabCount = 0
+		return
+	}
+
+	// Multiple matches with no further common prefix
+	if *tabCount == 0 {
+		fmt.Print("\a")
+		(*tabCount)++
+		return
+	}
+
+	// Second tab: list all candidates (dirs shown with trailing /)
+	display := make([]string, 0, len(allMatches))
+	for _, d := range dirMatches {
+		display = append(display, d+"/")
+	}
+	display = append(display, matches...)
+	slices.Sort(display)
+	term.Restore(fd, oldState)
+	fmt.Fprintf(os.Stdout, "\r\n%s\r\n$ ", strings.Join(display, "  "))
+	term.MakeRaw(fd)
+	fmt.Fprint(os.Stdout, *input)
+	*tabCount = 0
 }
 
 func (s *Shell) completeCommand(fd int, oldState *term.State, input *string, tabCount *int) {
 	matches := filter(s.allCommands, *input)
 	slices.Sort(matches)
 
-	if len(matches) > 1 {
-		if *tabCount == 0 {
-			common := findCommonPrefix(matches)
-			if common != *input {
-				*input = common
-				fmt.Print("\r\x1b[K")
-				fmt.Printf("$ %s", *input)
-			} else {
-				(*tabCount)++
-				fmt.Print("\a")
-			}
-		} else {
-			term.Restore(fd, oldState)
-			fmt.Fprintf(os.Stdout, "\r\n%s\r\n$ ", strings.Join(matches, "  "))
-			term.MakeRaw(fd)
-			fmt.Fprint(os.Stdout, *input)
-			*tabCount = 0
-		}
+	if len(matches) == 0 {
+		fmt.Print("\a")
 		return
 	}
 
-	matched := false
-	for _, v := range s.allCommands {
-		parts := strings.Split(*input, " ")
-		if after, ok := strings.CutPrefix(v, parts[0]); ok {
-			for range parts[1:] {
-				fmt.Fprint(os.Stdout, "\b")
-			}
-			fmt.Fprint(os.Stdout, after+" "+strings.Join(parts[1:], " "))
-			*input = v + " " + strings.Join(parts[1:], " ")
-			matched = true
-			break
-		}
+	// Single exact match: append space
+	if len(matches) == 1 {
+		*input = matches[0] + " "
+		fmt.Printf("\r\x1b[K$ %s", *input)
+		*tabCount = 0
+		return
 	}
-	if !matched {
-		fmt.Fprint(os.Stdout, "\a")
+
+	// Always complete to LCP immediately
+	if common := findCommonPrefix(matches); common != *input {
+		*input = common
+		fmt.Printf("\r\x1b[K$ %s", *input)
+		*tabCount = 0
+		return
 	}
+
+	// Multiple matches with no further common prefix
+	if *tabCount == 0 {
+		fmt.Print("\a")
+		(*tabCount)++
+		return
+	}
+
+	// Second tab: list all candidates
+	term.Restore(fd, oldState)
+	fmt.Fprintf(os.Stdout, "\r\n%s\r\n$ ", strings.Join(matches, "  "))
+	term.MakeRaw(fd)
+	fmt.Fprint(os.Stdout, *input)
+	*tabCount = 0
 }
