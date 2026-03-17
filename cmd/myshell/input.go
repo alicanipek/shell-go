@@ -83,23 +83,31 @@ func (s *Shell) completeFilePath(fd int, oldState *term.State, input *string) {
 		folderPrefix = folder + "/"
 	}
 
-	files, _ := filesInFolder(folder)
+	files, dirs, _ := getFilesAndDirectories(folder)
 	matches := filter(files, filePart)
+	dirMatches := filter(dirs, filePart)
 	slices.Sort(matches)
+	slices.Sort(dirMatches)
 
-	switch len(matches) {
-	case 0:
+	if len(matches) == 0 && len(dirMatches) == 0 {
 		fmt.Print("\a")
-	case 1:
+		return
+	} else if len(matches) == 1 && len(dirMatches) == 0 {
 		*input = cmdPart + folderPrefix + matches[0] + " "
 		fmt.Printf("\r\x1b[K$ %s", *input)
-	default:
+		return
+	} else if len(matches) == 0 && len(dirMatches) == 1 {
+		*input = cmdPart + folderPrefix + dirMatches[0] + "/"
+		fmt.Printf("\r\x1b[K$ %s", *input)
+		return
+	} else {
 		*input = cmdPart + folderPrefix + filePart
 		term.Restore(fd, oldState)
 		fmt.Fprintf(os.Stdout, "\r\n%s\r\n$ ", strings.Join(matches, "  "))
 		term.MakeRaw(fd)
 		fmt.Fprint(os.Stdout, *input)
 	}
+
 }
 
 func (s *Shell) completeCommand(fd int, oldState *term.State, input *string, tabCount *int) {

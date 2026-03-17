@@ -75,18 +75,21 @@ func isExecutable(name string, perm os.FileMode) bool {
 	return perm&0111 != 0 || strings.HasSuffix(strings.ToLower(name), ".exe")
 }
 
-func filesInFolder(folder string) ([]string, error) {
+func getFilesAndDirectories(folder string) ([]string, []string, error) {
 	entries, err := os.ReadDir(path.Join(os.Getenv("PWD"), folder))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var files []string
+	var dirs []string
 	for _, entry := range entries {
-		if !entry.IsDir() {
+		if entry.IsDir() {
+			dirs = append(dirs, entry.Name())
+		} else {
 			files = append(files, entry.Name())
 		}
 	}
-	return files, nil
+	return files, dirs, nil
 }
 
 func concat(a, b []string) []string {
