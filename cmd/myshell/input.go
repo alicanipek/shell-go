@@ -59,13 +59,13 @@ func (s *Shell) readInput(rd io.Reader) string {
 
 func (s *Shell) handleTab(fd int, oldState *term.State, input *string, tabCount *int) {
 	if strings.Contains(*input, " ") {
-		s.completeFilePath(fd, oldState, input)
+		s.completeFilePath(fd, oldState, input, tabCount)
 		return
 	}
 	s.completeCommand(fd, oldState, input, tabCount)
 }
 
-func (s *Shell) completeFilePath(fd int, oldState *term.State, input *string) {
+func (s *Shell) completeFilePath(fd int, oldState *term.State, input *string, tabCount *int) {
 	spaceIdx := strings.LastIndex(*input, " ") + 1
 	cmdPart := *input
 	filePart := ""
@@ -89,23 +89,36 @@ func (s *Shell) completeFilePath(fd int, oldState *term.State, input *string) {
 	slices.Sort(matches)
 	slices.Sort(dirMatches)
 
-	if len(matches) == 0 && len(dirMatches) == 0 {
+	if *tabCount == 0 && len(matches) == 0 && len(dirMatches) == 0 {
 		fmt.Print("\a")
 		return
-	} else if len(matches) == 1 && len(dirMatches) == 0 {
+	} else if *tabCount == 0 && len(matches) == 1 && len(dirMatches) == 0 {
 		*input = cmdPart + folderPrefix + matches[0] + " "
 		fmt.Printf("\r\x1b[K$ %s", *input)
+		*tabCount = 0
 		return
-	} else if len(matches) == 0 && len(dirMatches) == 1 {
-		*input = cmdPart + folderPrefix + dirMatches[0] + "/"
+	} else if *tabCount == 0 && len(matches) == 0 && len(dirMatches) == 1 {
+		*input = cmdPart + folderPrefix + dirMatches[0]
 		fmt.Printf("\r\x1b[K$ %s", *input)
+		*tabCount = 0
 		return
 	} else {
-		*input = cmdPart + folderPrefix + filePart
-		term.Restore(fd, oldState)
-		fmt.Fprintf(os.Stdout, "\r\n%s\r\n$ ", strings.Join(matches, "  "))
-		term.MakeRaw(fd)
-		fmt.Fprint(os.Stdout, *input)
+		if *tabCount == 0 {
+			fmt.Print("\a")
+			(*tabCount)++
+			return
+		} else {
+			*input = cmdPart + folderPrefix + filePart
+			term.Restore(fd, oldState)
+			dirMatchesString := strings.Join(dirMatches, " ")
+			fileMatchesString := strings.Join(matches, "  ")
+			fmt.Fprintf(os.Stdout, "\r\n%s\r\n$ ", strings.TrimSpace(dirMatchesString+" "+fileMatchesString))
+			term.MakeRaw(fd)
+			fmt.Fprint(os.Stdout, *input)
+			*tabCount = 0
+			return
+		}
+
 	}
 
 }

@@ -76,7 +76,8 @@ func isExecutable(name string, perm os.FileMode) bool {
 }
 
 func getFilesAndDirectories(folder string) ([]string, []string, error) {
-	entries, err := os.ReadDir(path.Join(os.Getenv("PWD"), folder))
+	pwd := os.Getenv("PWD")
+	entries, err := os.ReadDir(path.Join(pwd, folder))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -84,7 +85,7 @@ func getFilesAndDirectories(folder string) ([]string, []string, error) {
 	var dirs []string
 	for _, entry := range entries {
 		if entry.IsDir() {
-			dirs = append(dirs, entry.Name())
+			dirs = append(dirs, entry.Name()+"/")
 		} else {
 			files = append(files, entry.Name())
 		}
