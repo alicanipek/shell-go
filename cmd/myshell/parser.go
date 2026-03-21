@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,60 +11,89 @@ import (
 type Command struct {
 	Name   string
 	Args   []string
-	Stdout *os.File
-	Stderr *os.File
-	Stdin  *os.File
+	Stdout io.Writer
+	Stderr io.Writer
+	Stdin  io.Reader
+}
+
+func NewCommand() Command {
+	return Command{
+		Stdout: os.Stdout,
+		Stderr: os.Stderr,
+		Stdin:  os.Stdin,
+	}
 }
 
 func parseInput(input string) []Command {
-	commands := strings.Split(input, "|")
-	var result []Command
-	for _, cmd := range commands {
+	parts := strings.Split(input, "|")
+	var commands []Command
+	for _, command := range parts {
+		cmd := NewCommand()
+		args := tokenize(command)
+		cmd.Name = args[0]
+		cmd.Args = args[1:]
+		commands = append(commands, cmd)
+	}
 
-		stdout := os.Stdout
-		stderr := os.Stderr
-		command := cmd
+	for i := 0; i < len(commands)-1; i++ {
+		pipeReader, pipeWriter := io.Pipe()
+		commands[i].Stdout = pipeWriter
+		commands[i+1].Stdin = pipeReader
+	}
+
+	for i := range parts {
+		part := parts[i]
+		var target *io.Writer
+		var filename string
 
 		switch {
-		case strings.Contains(input, "1>>"):
-			parts := strings.SplitN(input, "1>>", 2)
-			command = strings.TrimSpace(parts[0])
-			stdout = openFile(strings.TrimSpace(parts[1]), os.O_APPEND|os.O_CREATE|os.O_WRONLY)
-		case strings.Contains(input, "2>>"):
-			parts := strings.SplitN(input, "2>>", 2)
-			command = strings.TrimSpace(parts[0])
-			stderr = openFile(strings.TrimSpace(parts[1]), os.O_APPEND|os.O_CREATE|os.O_WRONLY)
-		case strings.Contains(input, "2>"):
-			parts := strings.SplitN(input, "2>", 2)
-			command = strings.TrimSpace(parts[0])
-			stderr = openFile(strings.TrimSpace(parts[1]), os.O_CREATE|os.O_WRONLY|os.O_TRUNC)
-		case strings.Contains(input, ">>"):
-			parts := strings.SplitN(input, ">>", 2)
-			command = strings.TrimSpace(parts[0])
-			stdout = openFile(strings.TrimSpace(parts[1]), os.O_APPEND|os.O_CREATE|os.O_WRONLY)
-		case strings.Contains(input, "1>"):
-			parts := strings.SplitN(input, "1>", 2)
-			command = strings.TrimSpace(parts[0])
-			stdout = openFile(strings.TrimSpace(parts[1]), os.O_CREATE|os.O_WRONLY|os.O_TRUNC)
-		case strings.Contains(input, ">"):
-			parts := strings.SplitN(input, ">", 2)
-			command = strings.TrimSpace(parts[0])
-			stdout = openFile(strings.TrimSpace(parts[1]), os.O_CREATE|os.O_WRONLY|os.O_TRUNC)
+		case strings.Contains(part, "1>>"):
+			splitParts := strings.SplitN(part, "1>>", 2)
+			target = &commands[i].Stdout
+			filename = strings.TrimSpace(splitParts[1])
+			commands[i].Name, commands[i].Args = parseCommandWithoutRedirection(splitParts[0])
+			*target = openFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY)
+		case strings.Contains(part, "2>>"):
+			splitParts := strings.SplitN(part, "2>>", 2)
+			target = &commands[i].Stderr
+			filename = strings.TrimSpace(splitParts[1])
+			commands[i].Name, commands[i].Args = parseCommandWithoutRedirection(splitParts[0])
+			*target = openFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY)
+		case strings.Contains(part, "2>"):
+			splitParts := strings.SplitN(part, "2>", 2)
+			target = &commands[i].Stderr
+			filename = strings.TrimSpace(splitParts[1])
+			commands[i].Name, commands[i].Args = parseCommandWithoutRedirection(splitParts[0])
+			*target = openFile(filename, os.O_CREATE|os.O_WRONLY|os.O_TRUNC)
+		case strings.Contains(part, ">>"):
+			splitParts := strings.SplitN(part, ">>", 2)
+			target = &commands[i].Stdout
+			filename = strings.TrimSpace(splitParts[1])
+			commands[i].Name, commands[i].Args = parseCommandWithoutRedirection(splitParts[0])
+			*target = openFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY)
+		case strings.Contains(part, "1>"):
+			splitParts := strings.SplitN(part, "1>", 2)
+			target = &commands[i].Stdout
+			filename = strings.TrimSpace(splitParts[1])
+			commands[i].Name, commands[i].Args = parseCommandWithoutRedirection(splitParts[0])
+			*target = openFile(filename, os.O_CREATE|os.O_WRONLY|os.O_TRUNC)
+		case strings.Contains(part, ">"):
+			splitParts := strings.SplitN(part, ">", 2)
+			target = &commands[i].Stdout
+			filename = strings.TrimSpace(splitParts[1])
+			commands[i].Name, commands[i].Args = parseCommandWithoutRedirection(splitParts[0])
+			*target = openFile(filename, os.O_CREATE|os.O_WRONLY|os.O_TRUNC)
 		}
-
-		args := tokenize(command)
-		result = append(
-			result,
-			Command{
-				Name:   args[0],
-				Args:   args[1:],
-				Stdout: stdout,
-				Stderr: stderr,
-				Stdin:  os.Stdin,
-			},
-		)
 	}
-	return result
+	return commands
+}
+
+func parseCommandWithoutRedirection(cmdStr string) (string, []string) {
+	args := tokenize(cmdStr)
+	if len(args) == 0 {
+		return "", nil
+	}
+	return args[0], args[1:]
 }
 
 func tokenize(command string) []string {
