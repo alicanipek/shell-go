@@ -7,8 +7,9 @@ import (
 	"strings"
 )
 
-func execute(name string, args []string, stdout, stderr *os.File) error {
+func execute(name string, args []string, stdin, stdout, stderr *os.File) error {
 	cmd := exec.Command(name, args...)
+	cmd.Stdin = stdin
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 	return cmd.Run()

@@ -10,7 +10,7 @@ import (
 
 var builtins = []string{"type", "exit", "echo", "pwd", "cd"}
 
-func (s *Shell) dispatch(cmd string, args []string, stdout, stderr *os.File) {
+func (s *Shell) dispatch(cmd string, args []string, stdin, stdout, stderr *os.File) {
 	switch cmd {
 	case "exit":
 		code := 0
@@ -57,7 +57,7 @@ func (s *Shell) dispatch(cmd string, args []string, stdout, stderr *os.File) {
 		}
 
 	default:
-		if err := execute(cmd, args, stdout, stderr); err != nil && isNotFound(err) {
+		if err := execute(cmd, args, stdin, stdout, stderr); err != nil && isNotFound(err) {
 			fmt.Fprintln(stderr, cmd+": command not found")
 		}
 	}

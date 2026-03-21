@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
+	"os/exec"
 	"strings"
 	"sync"
 )
@@ -35,16 +37,41 @@ func (s *Shell) run() {
 		raw := s.readInput(os.Stdin)
 		command := strings.TrimRight(raw, "\n")
 
-		args, stdout, stderr := parseInput(command)
-		if len(args) == 0 {
-			closeIfNotStd(stdout)
-			closeIfNotStd(stderr)
+		commands := parseInput(command)
+		if len(commands) == 0 {
 			continue
 		}
+		if len(commands) == 1 {
+			s.dispatch(commands[0].Name, commands[0].Args, commands[0].Stdin, commands[0].Stdout, commands[0].Stderr)
+			closeIfNotStd(commands[0].Stdout)
+			closeIfNotStd(commands[0].Stderr)
+			closeIfNotStd(commands[0].Stdin)
+		} else {
+			c1 := exec.Command(commands[0].Name, commands[0].Args...)
+			c1.Stdout = commands[0].Stdout
+			c1.Stderr = commands[0].Stderr
+			c1.Stdin = commands[0].Stdin
+			c2 := exec.Command(commands[1].Name, commands[1].Args...)
+			c2.Stdout = commands[1].Stdout
+			c2.Stderr = commands[1].Stderr
+			c2.Stdin = commands[1].Stdin
 
-		s.dispatch(args[0], args[1:], stdout, stderr)
-		closeIfNotStd(stdout)
-		closeIfNotStd(stderr)
+			pr, pw := io.Pipe()
+			c1.Stdout = pw
+			c2.Stdin = pr
+			c2.Stdout = os.Stdout
+
+			c1.Start()
+			c2.Start()
+
+			go func() {
+				defer pw.Close()
+
+				c1.Wait()
+			}()
+			c2.Wait()
+
+		}
 	}
 }
 

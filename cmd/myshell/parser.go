@@ -7,40 +7,63 @@ import (
 	"strings"
 )
 
-func parseInput(input string) (args []string, stdout, stderr *os.File) {
-	stdout = os.Stdout
-	stderr = os.Stderr
-	command := input
+type Command struct {
+	Name   string
+	Args   []string
+	Stdout *os.File
+	Stderr *os.File
+	Stdin  *os.File
+}
 
-	switch {
-	case strings.Contains(input, "1>>"):
-		parts := strings.SplitN(input, "1>>", 2)
-		command = strings.TrimSpace(parts[0])
-		stdout = openFile(strings.TrimSpace(parts[1]), os.O_APPEND|os.O_CREATE|os.O_WRONLY)
-	case strings.Contains(input, "2>>"):
-		parts := strings.SplitN(input, "2>>", 2)
-		command = strings.TrimSpace(parts[0])
-		stderr = openFile(strings.TrimSpace(parts[1]), os.O_APPEND|os.O_CREATE|os.O_WRONLY)
-	case strings.Contains(input, "2>"):
-		parts := strings.SplitN(input, "2>", 2)
-		command = strings.TrimSpace(parts[0])
-		stderr = openFile(strings.TrimSpace(parts[1]), os.O_CREATE|os.O_WRONLY|os.O_TRUNC)
-	case strings.Contains(input, ">>"):
-		parts := strings.SplitN(input, ">>", 2)
-		command = strings.TrimSpace(parts[0])
-		stdout = openFile(strings.TrimSpace(parts[1]), os.O_APPEND|os.O_CREATE|os.O_WRONLY)
-	case strings.Contains(input, "1>"):
-		parts := strings.SplitN(input, "1>", 2)
-		command = strings.TrimSpace(parts[0])
-		stdout = openFile(strings.TrimSpace(parts[1]), os.O_CREATE|os.O_WRONLY|os.O_TRUNC)
-	case strings.Contains(input, ">"):
-		parts := strings.SplitN(input, ">", 2)
-		command = strings.TrimSpace(parts[0])
-		stdout = openFile(strings.TrimSpace(parts[1]), os.O_CREATE|os.O_WRONLY|os.O_TRUNC)
+func parseInput(input string) []Command {
+	commands := strings.Split(input, "|")
+	var result []Command
+	for _, cmd := range commands {
+
+		stdout := os.Stdout
+		stderr := os.Stderr
+		command := cmd
+
+		switch {
+		case strings.Contains(input, "1>>"):
+			parts := strings.SplitN(input, "1>>", 2)
+			command = strings.TrimSpace(parts[0])
+			stdout = openFile(strings.TrimSpace(parts[1]), os.O_APPEND|os.O_CREATE|os.O_WRONLY)
+		case strings.Contains(input, "2>>"):
+			parts := strings.SplitN(input, "2>>", 2)
+			command = strings.TrimSpace(parts[0])
+			stderr = openFile(strings.TrimSpace(parts[1]), os.O_APPEND|os.O_CREATE|os.O_WRONLY)
+		case strings.Contains(input, "2>"):
+			parts := strings.SplitN(input, "2>", 2)
+			command = strings.TrimSpace(parts[0])
+			stderr = openFile(strings.TrimSpace(parts[1]), os.O_CREATE|os.O_WRONLY|os.O_TRUNC)
+		case strings.Contains(input, ">>"):
+			parts := strings.SplitN(input, ">>", 2)
+			command = strings.TrimSpace(parts[0])
+			stdout = openFile(strings.TrimSpace(parts[1]), os.O_APPEND|os.O_CREATE|os.O_WRONLY)
+		case strings.Contains(input, "1>"):
+			parts := strings.SplitN(input, "1>", 2)
+			command = strings.TrimSpace(parts[0])
+			stdout = openFile(strings.TrimSpace(parts[1]), os.O_CREATE|os.O_WRONLY|os.O_TRUNC)
+		case strings.Contains(input, ">"):
+			parts := strings.SplitN(input, ">", 2)
+			command = strings.TrimSpace(parts[0])
+			stdout = openFile(strings.TrimSpace(parts[1]), os.O_CREATE|os.O_WRONLY|os.O_TRUNC)
+		}
+
+		args := tokenize(command)
+		result = append(
+			result,
+			Command{
+				Name:   args[0],
+				Args:   args[1:],
+				Stdout: stdout,
+				Stderr: stderr,
+				Stdin:  os.Stdin,
+			},
+		)
 	}
-
-	args = tokenize(command)
-	return
+	return result
 }
 
 func tokenize(command string) []string {
