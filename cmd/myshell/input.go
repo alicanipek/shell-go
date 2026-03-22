@@ -22,7 +22,7 @@ func (s *Shell) readInput(rd io.Reader) string {
 	reader := bufio.NewReader(rd)
 	var input string
 	tabCount := 0
-
+	upArrowCount := 0
 	for {
 		b, _, err := reader.ReadRune()
 		if err != nil {
@@ -48,8 +48,36 @@ func (s *Shell) readInput(rd io.Reader) string {
 			s.cacheReady.Wait()
 			s.handleTab(fd, oldState, &input, &tabCount)
 
+		case '\x1b':
+			seq1, _, _ := reader.ReadRune()
+			if seq1 != '[' {
+				continue // bare Escape or unknown sequence
+			}
+			seq2, _, _ := reader.ReadRune()
+			switch seq2 {
+			case 'A': // Up arrow
+				if upArrowCount >= len(s.history) {
+					fmt.Print("\a")
+				} else {
+					input = s.history[len(s.history)-1-upArrowCount]
+					upArrowCount++
+					fmt.Printf("\r\x1b[K$ %s", input)
+				}
+			case 'B': // Down arrow
+				if upArrowCount > 0 {
+					upArrowCount--
+					if upArrowCount == 0 {
+						input = ""
+					} else {
+						input = s.history[len(s.history)-upArrowCount]
+					}
+					fmt.Printf("\r\x1b[K$ %s", input)
+				}
+			}
+
 		default:
 			tabCount = 0
+			upArrowCount = 0
 			ch := string(b)
 			input += ch
 			fmt.Fprint(os.Stdout, ch)
