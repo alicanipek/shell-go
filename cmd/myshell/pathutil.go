@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -76,8 +75,8 @@ func isExecutable(name string, perm os.FileMode) bool {
 }
 
 func getFilesAndDirectories(folder string) ([]string, []string, error) {
-	pwd := os.Getenv("PWD")
-	entries, err := os.ReadDir(path.Join(pwd, folder))
+	pwd, _ := os.Getwd()
+	entries, err := os.ReadDir(filepath.Join(pwd, folder))
 	if err != nil {
 		return nil, nil, err
 	}

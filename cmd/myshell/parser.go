@@ -30,6 +30,9 @@ func parseInput(input string) []Command {
 	for _, command := range parts {
 		cmd := NewCommand()
 		args := tokenize(command)
+		if len(args) == 0 {
+			continue
+		}
 		cmd.Name = args[0]
 		cmd.Args = args[1:]
 		commands = append(commands, cmd)
