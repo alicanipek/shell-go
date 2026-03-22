@@ -96,6 +96,20 @@ func (s *Shell) builtinHistory(cmd Command) error {
 			if err := os.WriteFile(fileName, []byte(historyData), 0644); err != nil {
 				fmt.Fprintf(cmd.Stderr, "history: error writing file: %v\n", err)
 			}
+		case "-a":
+			f, err := os.OpenFile(fileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			if err != nil {
+				fmt.Fprintf(cmd.Stderr, "history: error opening file: %v\n", err)
+				return nil
+			}
+			defer f.Close()
+			for _, entry := range s.history[s.historyAppendOffset:] {
+				if _, err := f.WriteString(entry + "\n"); err != nil {
+					fmt.Fprintf(cmd.Stderr, "history: error writing to file: %v\n", err)
+					return nil
+				}
+			}
+			s.historyAppendOffset = len(s.history)
 		}
 		return nil
 

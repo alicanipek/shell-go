@@ -11,8 +11,9 @@ import (
 var builtinNames = []string{"type", "exit", "echo", "pwd", "cd", "history"}
 
 type Shell struct {
-	history           []string
-	cachedExecutables []string
+	history              []string
+	historyAppendOffset  int
+	cachedExecutables    []string
 	allCommands       []string
 	cacheReady        sync.WaitGroup
 	handlers          map[string]func(Command) error
