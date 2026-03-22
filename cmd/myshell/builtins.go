@@ -75,20 +75,30 @@ func (s *Shell) builtinHistory(cmd Command) error {
 		}
 	}
 
-	if len(cmd.Args) == 2 && cmd.Args[0] == "-r" {
+	if len(cmd.Args) == 2 {
 		fileName := cmd.Args[1]
-		historyFromFile, err := os.ReadFile(fileName)
-		if err != nil {
-			fmt.Fprintf(cmd.Stderr, "history: error reading file: %v\n", err)
-			return nil
-		}
-		lines := strings.Split(string(historyFromFile), "\n")
-		for _, line := range lines {
-			if line != "" {
-				s.history = append(s.history, line)
+		switch cmd.Args[0] {
+		case "-r":
+			historyFromFile, err := os.ReadFile(fileName)
+			if err != nil {
+				fmt.Fprintf(cmd.Stderr, "history: error reading file: %v\n", err)
+				return nil
+			}
+			lines := strings.Split(string(historyFromFile), "\n")
+			for _, line := range lines {
+				if line != "" {
+					s.history = append(s.history, line)
+				}
+			}
+		case "-w":
+			historyData := strings.Join(s.history, "\n")
+			historyData += "\n"
+			if err := os.WriteFile(fileName, []byte(historyData), 0644); err != nil {
+				fmt.Fprintf(cmd.Stderr, "history: error writing file: %v\n", err)
 			}
 		}
 		return nil
+
 	}
 
 	for i, entry := range s.history[len(s.history)-n:] {
