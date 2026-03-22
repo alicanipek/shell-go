@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"os"
@@ -11,12 +12,12 @@ import (
 var builtinNames = []string{"type", "exit", "echo", "pwd", "cd", "history"}
 
 type Shell struct {
-	history              []string
-	historyAppendOffset  int
-	cachedExecutables    []string
-	allCommands       []string
-	cacheReady        sync.WaitGroup
-	handlers          map[string]func(Command) error
+	history             []string
+	historyAppendOffset int
+	cachedExecutables   []string
+	allCommands         []string
+	cacheReady          sync.WaitGroup
+	handlers            map[string]func(Command) error
 }
 
 func NewShell() *Shell {
@@ -35,7 +36,30 @@ func NewShell() *Shell {
 		s.cachedExecutables, _ = getExecutablesInPath()
 		s.allCommands = concat(builtinNames, s.cachedExecutables)
 	}()
+
+	s.history = loadHistory()
+	s.historyAppendOffset = len(s.history)
 	return s
+}
+
+func loadHistory() []string {
+	historyFile := os.Getenv("HISTFILE")
+	if historyFile == "" {
+		return nil
+	}
+	f, err := os.Open(historyFile)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+	var history []string
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		if line := scanner.Text(); line != "" {
+			history = append(history, line)
+		}
+	}
+	return history
 }
 
 func (s *Shell) run() {
