@@ -7,7 +7,26 @@ import (
 	"strings"
 )
 
+func (s *Shell) appendHistoryTo(filename string) error {
+	if filename == "" {
+		return nil
+	}
+	f, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	for _, entry := range s.history[s.historyAppendOffset:] {
+		if _, err := f.WriteString(entry + "\n"); err != nil {
+			return err
+		}
+	}
+	s.historyAppendOffset = len(s.history)
+	return nil
+}
+
 func (s *Shell) builtinExit(cmd Command) error {
+	s.appendHistoryTo(os.Getenv("HISTFILE"))
 	code := 0
 	if len(cmd.Args) > 0 {
 		var err error
@@ -97,19 +116,9 @@ func (s *Shell) builtinHistory(cmd Command) error {
 				fmt.Fprintf(cmd.Stderr, "history: error writing file: %v\n", err)
 			}
 		case "-a":
-			f, err := os.OpenFile(fileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-			if err != nil {
-				fmt.Fprintf(cmd.Stderr, "history: error opening file: %v\n", err)
-				return nil
+			if err := s.appendHistoryTo(fileName); err != nil {
+				fmt.Fprintf(cmd.Stderr, "history: error appending to file: %v\n", err)
 			}
-			defer f.Close()
-			for _, entry := range s.history[s.historyAppendOffset:] {
-				if _, err := f.WriteString(entry + "\n"); err != nil {
-					fmt.Fprintf(cmd.Stderr, "history: error writing to file: %v\n", err)
-					return nil
-				}
-			}
-			s.historyAppendOffset = len(s.history)
 		}
 		return nil
 
