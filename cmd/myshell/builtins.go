@@ -67,8 +67,16 @@ func (s *Shell) builtinCd(cmd Command) error {
 }
 
 func (s *Shell) builtinHistory(cmd Command) error {
-	for i, entry := range s.history {
-		fmt.Fprintf(cmd.Stdout, "%d %s\n", i+1, entry)
+	n := len(s.history)
+	if len(cmd.Args) > 0 {
+		var err error
+		if n, err = strconv.Atoi(cmd.Args[0]); err != nil {
+			n = 0
+		}
+	}
+
+	for i, entry := range s.history[len(s.history)-n:] {
+		fmt.Fprintf(cmd.Stdout, "%d %s\n", len(s.history)-n+i+1, entry)
 	}
 	return nil
 }
