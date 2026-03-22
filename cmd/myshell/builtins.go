@@ -68,11 +68,27 @@ func (s *Shell) builtinCd(cmd Command) error {
 
 func (s *Shell) builtinHistory(cmd Command) error {
 	n := len(s.history)
-	if len(cmd.Args) > 0 {
+	if len(cmd.Args) == 1 {
 		var err error
 		if n, err = strconv.Atoi(cmd.Args[0]); err != nil {
 			n = 0
 		}
+	}
+
+	if len(cmd.Args) == 2 && cmd.Args[0] == "-r" {
+		fileName := cmd.Args[1]
+		historyFromFile, err := os.ReadFile(fileName)
+		if err != nil {
+			fmt.Fprintf(cmd.Stderr, "history: error reading file: %v\n", err)
+			return nil
+		}
+		lines := strings.Split(string(historyFromFile), "\n")
+		for _, line := range lines {
+			if line != "" {
+				s.history = append(s.history, line)
+			}
+		}
+		return nil
 	}
 
 	for i, entry := range s.history[len(s.history)-n:] {
